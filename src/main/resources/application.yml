@@ -1,0 +1,23 @@
+### Main config ###
+
+spring.datasource.hikari:
+  connection-timeout: 2500
+  validation-timeout: 500
+  leak-detection-threshold: 15000
+  max-lifetime: 180000
+  maximum-pool-size: 64
+spring.flyway:
+  locations: classpath:db/main
+  sql-migration-separator: '-'
+  validate-migration-naming: true
+spring.jpa.properties.hibernate:
+  dialect: org.hibernate.dialect.PostgreSQLDialect
+  jdbc.batch_size: 50
+  jdbc.fetch_size: 30
+  jdbc.time_zone: UTC
+  max_fetch_depth: 3
+  order_inserts: true
+  order_updates: true
+  query.in_clause_parameter_padding: true
+  implicit_naming_strategy: org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy
+  physical_naming_strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
