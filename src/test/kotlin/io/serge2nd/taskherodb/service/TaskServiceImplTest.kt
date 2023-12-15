@@ -3,24 +3,24 @@ package io.serge2nd.taskherodb.service
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
 import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.collections.shouldBeSingleton
+import io.kotest.matchers.comparables.shouldBeGreaterThanOrEqualTo
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
-import io.kotest.matchers.types.shouldNotBeInstanceOf
 import io.serge2nd.taskhero.db.*
-import io.serge2nd.taskhero.dto.GetTaskDto
-import io.serge2nd.taskhero.dto.HeroDto
-import io.serge2nd.taskhero.dto.TaskDto
-import io.serge2nd.taskhero.dto.TeamDto
+import io.serge2nd.taskhero.dto.*
 import io.serge2nd.taskhero.enums.TaskPriority
+import io.serge2nd.taskhero.enums.TaskPriority.Low
 import io.serge2nd.taskhero.enums.TaskStatus
-import io.serge2nd.taskhero.service.ServiceError
 import io.serge2nd.taskhero.service.ServiceError.NotFound
 import io.serge2nd.taskhero.service.TaskServiceImpl
 import io.serge2nd.taskherodb.config.JpaAppTest
 import jakarta.persistence.EntityManager
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.util.ReflectionTestUtils.setField
 import org.springframework.transaction.annotation.Transactional
 import java.time.Duration
+import java.time.Duration.ZERO
 import java.time.LocalDate
 import java.time.OffsetDateTime
 
@@ -93,5 +93,75 @@ internal class TaskServiceImplTest(
         }
     }
 
-    // TODO other tests
+    test("create task") {
+        // GIVEN
+        val team = teamRepo.findByTitle("bandits")!!
+        val chiefUser = accRepo.findByUserName("serge")!!.userName
+        val heroUser = accRepo.findByUserName("vi")!!.userName
+        val expected = TaskDto(
+            "wake up",
+            "just wake up",
+            LocalDate.now(),
+            Duration.ofHours(3),
+            TaskPriority.High,
+            TeamDto(team.title),
+            HeroDto(chiefUser),
+            HeroDto(heroUser),
+            TaskStatus.Open,
+            ZERO,
+            OffsetDateTime.now(),
+            emptyList()
+        )
+
+        // WHEN
+        val actual = expected.run {
+            srv.createTask(CreateTaskDto(title, details, dueDate, "$cost", priority, team.title, chiefUser, heroUser))
+        }
+
+        // THEN
+        actual.shouldBeRight().let {
+            it.createdAt shouldBeGreaterThanOrEqualTo expected.createdAt
+            setField(it, "createdAt", expected.createdAt)
+            it shouldBe expected
+        }
+    }
+
+    test("update task status") {
+        // GIVEN
+        val team = teamRepo.findByTitle("police")!!
+        val hero = accRepo.findByUserName("alex")!!.heroesByTeamId[team.id]!!
+        em.persist(Task(0, "", "", LocalDate.now(), ZERO, Low, team, hero, hero))
+        em.flush(); em.clear()
+
+        // WHEN
+        val actual = srv.updateTaskStatus("", UpdateTaskStatusDto(team.title, TaskStatus.Work))
+
+        // THEN
+        actual shouldBeRight Unit
+        em.createQuery("from Task", Task::class.java)
+            .resultList.shouldBeSingleton { it.status shouldBe TaskStatus.Work }
+    }
+
+    test("log spent") {
+        // GIVEN
+        val team = teamRepo.findByTitle("police")!!
+        val hero = accRepo.findByUserName("alex")!!.heroesByTeamId[team.id]!!
+        val spentTotal = Duration.ofHours(1)
+        val spent = Duration.ofMinutes(45)
+        em.persist(Task(0, "", "", LocalDate.now(), ZERO, Low, team, hero, hero, TaskStatus.Work, spentTotal - spent))
+        em.flush(); em.clear()
+
+        // WHEN
+        val actual = srv.logSpent("", LogSpentDto(team.title, "alex", "$spent"))
+
+        // THEN
+        actual shouldBeRight Unit
+        em.createQuery("from Task t join fetch t.log", Task::class.java)
+            .resultList.shouldBeSingleton {
+                it.spentTotal shouldBe spentTotal
+                it.log.shouldBeSingleton { it.spent shouldBe spent }
+            }
+    }
+
+    // TODO more tests
 })
