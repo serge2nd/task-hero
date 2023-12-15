@@ -13,4 +13,4 @@ $ docker compose up -d
 $ ./gradlew clean bootJar
 $ java -Duser.language=en -Duser.timezone=UTC -Dspring.profiles.active=dev -jar build/libs/task-hero.jar
 ```
-Then go to `http://localhost:8080//swagger-ui.html`
+Then go to `http://localhost:8080/swagger-ui.html`
