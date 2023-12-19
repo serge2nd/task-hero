@@ -10,8 +10,8 @@ import io.serge2nd.taskhero.service.ServiceError.Companion.notFound
 import io.serge2nd.taskhero.service.ServiceError.Companion.serviceScope
 import org.hibernate.Hibernate.isInitialized
 import org.springframework.stereotype.Service
+import org.springframework.transaction.support.TransactionOperations
 import java.time.Duration
-import java.time.Duration.ZERO
 import io.serge2nd.taskhero.dto.AccountTaskLogDto.Spent as LogEntry
 import io.serge2nd.taskhero.spi.IoScoped as Repository
 
@@ -20,11 +20,12 @@ class TaskServiceImpl(
     private val accountRepo: Repository<Accounts>,
     private val teamRepo: Repository<Teams>,
     private val taskRepo: Repository<Tasks>,
+    private val txOps: TransactionOperations,
 ) : TaskService {
 
     override suspend fun getAccountTaskLog(rq: GetAccountTaskLogDto) = serviceScope {
         val acc = accountRepo { findByUserName(rq.userName) } ?: notFound(Account::userName, rq.userName)
-        val tasks = taskRepo { acc.heroes.flatMap { findTaskLog(it, rq.logFrom) } }
+        val tasks = taskRepo { findTaskLog(acc.heroes, rq.logFrom) }
         AccountTaskLogDto(
             log = tasks
                 .flatMap { t -> t.log.map { LogEntry(t.title, t.team.title, it.spent, it.addedAt) } }
@@ -46,7 +47,7 @@ class TaskServiceImpl(
 
     override suspend fun getTask(rq: GetTaskDto) = serviceScope {
         val team = teamRepo { findByTitle(rq.team) } ?: notFound(Team::title, rq.team)
-        val task = taskRepo { findByTeamAndTitle(team, rq.title) } ?: notFound(Task::title, rq.title.trim())
+        val task = taskRepo { findByTeamAndTitleHeavy(team, rq.title) } ?: notFound(Task::title, rq.title.trim())
         task.toDto()
     }
 
@@ -61,20 +62,18 @@ class TaskServiceImpl(
             ?: notFound(Account::userName, rq.chiefUser)
         val heroAcc = accountRepo { findByUserName(rq.heroUser) }
             ?: notFound(Account::userName, rq.heroUser)
-        val chief = chiefAcc.heroesByTeamId[team.id]
+        val chief = chiefAcc.hero(team)
             ?: notFound("chief ${rq.chiefUser} not in team", rq.team)
-        val hero = heroAcc.heroesByTeamId[team.id]
+        val hero = heroAcc.hero(team)
             ?: notFound("hero ${rq.heroUser} not in team", rq.team)
         if (taskRepo { findByTeamAndTitle(team, rq.title) } != null)
             conflict(Task::title, rq.title.trim())
-        val cost = Duration.parse(rq.cost)
-            .also { if (it <= ZERO) badRequest("cost must be positive") }
         taskRepo {
             Task(
                 title = rq.title,
                 details = rq.details,
                 dueDate = rq.dueDate,
-                cost = cost,
+                cost = Duration.parse(rq.cost),
                 priority = rq.priority,
                 team = team,
                 chief = chief,
@@ -85,7 +84,7 @@ class TaskServiceImpl(
 
     override suspend fun updateTaskStatus(title: String, rq: UpdateTaskStatusDto) = serviceScope {
         val team = teamRepo { findByTitle(rq.team) } ?: notFound(Team::title, rq.team)
-        taskRepo {
+        txOps(taskRepo) {
             findByTeamAndTitle(team, title)?.apply {
                 if (
                     status == Open && rq.status != Work ||
@@ -100,17 +99,13 @@ class TaskServiceImpl(
     override suspend fun logSpent(title: String, rq: LogSpentDto) = serviceScope {
         val team = teamRepo { findByTitle(rq.team) } ?: notFound(Team::title, rq.team)
         val acc = accountRepo { findByUserName(rq.userName) } ?: notFound(Account::userName, rq.userName)
-        taskRepo {
-            val task = findByTeamAndTitle(team, title) ?: notFound(Task::title, title.trim())
-            if (task.status != Work)
-                badRequest("task '${task.title}' status ${task.status} != ${Work}")
+        txOps(taskRepo) {
+            val task = findByTeamAndTitleAndStatus(team, title, Work)
+                ?: notFound("[Task in Work].title", title.trim())
             if (acc.id != task.chief.userId && acc.id != task.hero.userId)
                 badRequest("only chief or assignee can log on task")
-            val spent = Duration.parse(rq.spent)
-                .also { if (it <= ZERO) badRequest("spent must be positive") }
-            task.spentTotal += spent
-            task.logSpent(Task.Spent(acc.heroesByTeamId[team.id]!!, spent))
-            save(task)
+            val hero = acc.hero(team) ?: error("Account.heroes broken")
+            task.logSpent(Task.Spent(hero, Duration.parse(rq.spent)))
         }.let {}
     }
 }
@@ -127,7 +122,7 @@ private fun Task.toDto() = TaskDto(
     status = status,
     spentTotal = spentTotal,
     createdAt = createdAt,
-    log = if (isInitialized(log)) log.map {
+    log = log.takeIf(::isInitialized)?.map {
         TaskSpentDto(HeroDto(it.hero.userName), it.spent, it.addedAt)
-    } else emptyList()
+    }
 )

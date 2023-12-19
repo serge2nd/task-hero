@@ -1,34 +1,41 @@
 package io.serge2nd.taskhero.api
 
+import io.github.oshai.kotlinlogging.KotlinLogging
+
+import org.springframework.core.NestedRuntimeException
 import org.springframework.http.HttpStatus.BAD_REQUEST
 import org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.bind.support.WebExchangeBindException
-import org.springframework.web.server.ServerWebInputException
+import org.apache.commons.lang3.StringUtils.EMPTY as na
 
 @RestControllerAdvice
 class ErrorHandler {
 
     @ExceptionHandler
     fun handle(e: WebExchangeBindException) = e.bindingResult.fieldErrors.map {
-        FormatError(it.field, it.rejectedValue?.toString(),it.defaultMessage ?: "invalid")
+        FormatError(it.field, it.rejectedValue, it.defaultMessage ?: "invalid")
     }.plus(e.bindingResult.globalErrors.map {
         object { val msg = it.defaultMessage }
     }).let { ResponseEntity(it, BAD_REQUEST) }
 
     @ExceptionHandler
-    fun handle(e: ServerWebInputException) = ResponseEntity(
-        FormatError(e.methodParameter?.parameterName, null, e.message),
-        BAD_REQUEST
-    )
+    fun handle(e: NestedRuntimeException) = e.rootCause?.let(::handleRoot) ?: handle(e as Throwable)
 
     @ExceptionHandler
     fun handle(e: Throwable) = ResponseEntity<Any>(
-        object { val stackTrace = e.stackTraceToString() },
+        object { val msg = "$e" },
         INTERNAL_SERVER_ERROR
-    )
+    ).also { log.error(e, ::na) }
 
-    class FormatError(val prop: String?, val value: String?, val msg: String)
+    private fun handleRoot(e: Throwable) = when (e) {
+        is WebExchangeBindException -> handle(e)
+        else -> handle(e)
+    }
+
+    data class FormatError(val prop: String, val value: Any?, val msg: String)
 }
+
+private val log = KotlinLogging.logger {}

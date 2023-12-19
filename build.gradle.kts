@@ -29,6 +29,7 @@ dependencies {
 
     //region Web
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("com.google.code.findbugs:jsr305:3.0.2")
     implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:2.3.0")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-validation")
@@ -52,11 +53,8 @@ kotlin {
         "-Xjsr305=strict",
         "-Xjvm-default=all"
     )
-    allOpen.annotations(
-        "javax.persistence.Entity",
-        "javax.persistence.Embeddable",
-        "javax.persistence.MappedSuperclass"
-    )
+    for (pkg in setOf("jakarta.persistence", "javax.persistence"))
+        allOpen.annotations("$pkg.Entity", "$pkg.Embeddable", "$pkg.MappedSuperclass")
     noArg.invokeInitializers = true
 }
 
@@ -64,6 +62,9 @@ tasks.withType<Test> {
     useJUnitPlatform()
     testLogging.showStandardStreams = true
     jvmArgs = listOf(
+        "-Dspring.profiles.active=dev,test",
+        "-Duser.language=en",
+        "-Duser.timezone=UTC",
         "-Dkotest.framework.config.fqn=io.serge2nd.taskherodb.config.TestProject",
         "-Dkotest.framework.classpath.scanning.autoscan.disable=true",
         "-Dkotest.framework.classpath.scanning.config.disable=true",
@@ -72,6 +73,5 @@ tasks.withType<Test> {
 }
 
 tasks.bootJar {
-    mainClass = "io.serge2nd.taskhero.AppKt"
     archiveVersion = ""
 }

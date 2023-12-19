@@ -18,5 +18,5 @@ data class TaskDto(
     val status: TaskStatus,
     val spentTotal: Duration,
     val createdAt: OffsetDateTime,
-    val log: List<TaskSpentDto>,
+    val log: List<TaskSpentDto>?,
 )

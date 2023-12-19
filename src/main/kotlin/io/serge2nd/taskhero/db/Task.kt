@@ -39,8 +39,6 @@ class Task(
     @CollectionTable(name = "task_spent")
     val log: List<Spent> = ArrayList()
 
-    fun logSpent(spent: Spent) = (log as MutableList).add(spent)
-
     @Embeddable
     data class Spent(
         @ManyToOne(fetch = LAZY) val hero: Hero,

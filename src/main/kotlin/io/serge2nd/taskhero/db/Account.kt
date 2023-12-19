@@ -15,5 +15,6 @@ class Account(
     @OneToMany(mappedBy = "account")
     val heroes: List<Hero> = ArrayList()
 
-    val heroesByTeamId get() = heroes.associateBy { it.team.id }
+    // expecting every user to belong to small number of teams
+    fun hero(team: Team) = heroes.find { it.team.id == team.id }
 }

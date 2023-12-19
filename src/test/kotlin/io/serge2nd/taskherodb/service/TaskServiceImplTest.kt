@@ -16,9 +16,9 @@ import io.serge2nd.taskhero.service.ServiceError.NotFound
 import io.serge2nd.taskhero.service.TaskServiceImpl
 import io.serge2nd.taskherodb.config.JpaAppTest
 import jakarta.persistence.EntityManager
-import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.util.ReflectionTestUtils.setField
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionOperations
 import java.time.Duration
 import java.time.Duration.ZERO
 import java.time.LocalDate
@@ -31,21 +31,23 @@ import java.time.OffsetDateTime
  */
 @JpaAppTest
 @Transactional
-@ActiveProfiles("dev", "test")
 internal class TaskServiceImplTest(
-    val accRepo: Accounts,
-    val teamRepo: Teams,
-    val taskRepo: Tasks,
-    val em: EntityManager,
+    accRepo: Accounts,
+    teamRepo: Teams,
+    taskRepo: Tasks,
+    em: EntityManager,
+    txOps: TransactionOperations
 ) : FunSpec({
 
-    val srv = TaskServiceImpl(accRepo, teamRepo, taskRepo)
+    val srv = TaskServiceImpl(accRepo, teamRepo, taskRepo, txOps)
+
+    fun EntityManager.reset() { flush(); clear() }
 
     test("get task") {
         // GIVEN
         val team = teamRepo.findByTitle("police")!!
         val acc = accRepo.findByUserName("alex")!!
-        val hero = acc.heroesByTeamId[team.id]!!
+        val hero = acc.hero(team)!!
         val expected = TaskDto(
             "wake up",
             "just wake up",
@@ -129,9 +131,9 @@ internal class TaskServiceImplTest(
     test("update task status") {
         // GIVEN
         val team = teamRepo.findByTitle("police")!!
-        val hero = accRepo.findByUserName("alex")!!.heroesByTeamId[team.id]!!
+        val hero = accRepo.findByUserName("alex")!!.hero(team)!!
         em.persist(Task(0, "", "", LocalDate.now(), ZERO, Low, team, hero, hero))
-        em.flush(); em.clear()
+        em.reset()
 
         // WHEN
         val actual = srv.updateTaskStatus("", UpdateTaskStatusDto(team.title, TaskStatus.Work))
@@ -145,14 +147,15 @@ internal class TaskServiceImplTest(
     test("log spent") {
         // GIVEN
         val team = teamRepo.findByTitle("police")!!
-        val hero = accRepo.findByUserName("alex")!!.heroesByTeamId[team.id]!!
+        val hero = accRepo.findByUserName("alex")!!.hero(team)!!
         val spentTotal = Duration.ofHours(1)
         val spent = Duration.ofMinutes(45)
         em.persist(Task(0, "", "", LocalDate.now(), ZERO, Low, team, hero, hero, TaskStatus.Work, spentTotal - spent))
-        em.flush(); em.clear()
+        em.reset()
 
         // WHEN
         val actual = srv.logSpent("", LogSpentDto(team.title, "alex", "$spent"))
+        em.reset()
 
         // THEN
         actual shouldBeRight Unit
