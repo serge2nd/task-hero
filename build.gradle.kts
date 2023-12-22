@@ -1,7 +1,8 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.jetbrains.kotlin.utils.findIsInstanceAnd as on
+
 plugins {
-    `java-library`
     kotlin("jvm") version "1.9.21"
-    kotlin("kapt") version "1.9.21"
     kotlin("plugin.jpa") version "1.9.21"
     kotlin("plugin.spring") version "1.9.21"
     id("org.springframework.boot") version "3.2.0"
@@ -23,7 +24,6 @@ dependencies {
     //region Data
     implementation("io.hypersistence:hypersistence-utils-hibernate-62:3.6.1")
     implementation("org.flywaydb:flyway-core")
-    kapt("org.hibernate:hibernate-jpamodelgen:6.3.2.Final")
     runtimeOnly("org.postgresql:postgresql")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa") //endregion
 
@@ -37,6 +37,10 @@ dependencies {
 
     //region Test
     testImplementation("com.h2database:h2:2.2.224")
+    testImplementation("com.linecorp.kotlin-jdsl:jpql-dsl:3.2.0")
+    testImplementation("com.linecorp.kotlin-jdsl:jpql-render:3.2.0")
+    testImplementation("com.linecorp.kotlin-jdsl:spring-data-jpa-support:3.2.0")
+    testImplementation("com.ninja-squad:springmockk:4.0.2")
     testImplementation(platform("io.kotest:kotest-bom:5.8.0"))
     testImplementation("io.kotest:kotest-assertions-core")
     testImplementation("io.kotest:kotest-runner-junit5")
@@ -56,6 +60,10 @@ kotlin {
     for (pkg in setOf("jakarta.persistence", "javax.persistence"))
         allOpen.annotations("$pkg.Entity", "$pkg.Embeddable", "$pkg.MappedSuperclass")
     noArg.invokeInitializers = true
+}
+
+tasks.on<KotlinCompile> { "Test" in it.name }?.run {
+    compilerOptions.freeCompilerArgs.add("-Xcontext-receivers")
 }
 
 tasks.withType<Test> {

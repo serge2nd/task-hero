@@ -1,5 +1,6 @@
 package io.serge2nd.taskherodb.config
 
+import com.linecorp.kotlinjdsl.support.spring.data.jpa.autoconfigure.KotlinJdslAutoConfiguration
 import io.serge2nd.taskhero.DummyHeroes
 import io.serge2nd.taskherodb.config.JpaAppTest.Companion.ORM_PKG
 import org.springframework.boot.autoconfigure.domain.EntityScan
@@ -12,20 +13,20 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment.NONE
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 import org.springframework.test.context.ContextConfiguration
-import org.springframework.transaction.annotation.EnableTransactionManagement
 
 @SpringBootTest(webEnvironment = NONE)
 @ContextConfiguration(classes = [
     DataSourceAutoConfiguration::class,
-    TransactionManagerCustomizationAutoConfiguration::class,
     HibernateJpaAutoConfiguration::class,
+    KotlinJdslAutoConfiguration::class,
     SqlInitializationAutoConfiguration::class,
     TransactionAutoConfiguration::class,
+    TransactionManagerCustomizationAutoConfiguration::class,
+    JpaAppTest.Companion::class,
     DummyHeroes::class
 ])
-@EnableJpaRepositories(basePackages = [ORM_PKG])
-@EntityScan(basePackages = [ORM_PKG])
 annotation class JpaAppTest {
 
+    @EnableJpaRepositories(ORM_PKG) @EntityScan(ORM_PKG)
     companion object { const val ORM_PKG = "io.serge2nd.taskhero.db" }
 }

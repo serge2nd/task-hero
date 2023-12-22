@@ -1,28 +1,27 @@
 package io.serge2nd.taskherodb.service
 
+import arrow.core.flatMap
+import com.linecorp.kotlinjdsl.support.spring.data.jpa.repository.KotlinJdslJpqlExecutor
 import io.kotest.assertions.arrow.core.shouldBeLeft
 import io.kotest.assertions.arrow.core.shouldBeRight
-import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldBeSingleton
+import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.comparables.shouldBeGreaterThanOrEqualTo
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.serge2nd.taskhero.db.*
 import io.serge2nd.taskhero.dto.*
-import io.serge2nd.taskhero.enums.TaskPriority
-import io.serge2nd.taskhero.enums.TaskPriority.Low
-import io.serge2nd.taskhero.enums.TaskStatus
+import io.serge2nd.taskhero.enums.TaskStatus.Open
+import io.serge2nd.taskhero.enums.TaskStatus.Work
 import io.serge2nd.taskhero.service.ServiceError.NotFound
 import io.serge2nd.taskhero.service.TaskServiceImpl
+import io.serge2nd.taskherodb.*
 import io.serge2nd.taskherodb.config.JpaAppTest
 import jakarta.persistence.EntityManager
 import org.springframework.test.util.ReflectionTestUtils.setField
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionOperations
-import java.time.Duration
-import java.time.Duration.ZERO
-import java.time.LocalDate
-import java.time.OffsetDateTime
+import java.time.Duration.*
 
 /**
  * Strictly, that's not a "canonical" unit test,
@@ -36,134 +35,108 @@ internal class TaskServiceImplTest(
     teamRepo: Teams,
     taskRepo: Tasks,
     em: EntityManager,
-    txOps: TransactionOperations
-) : FunSpec({
+    txOps: TransactionOperations,
+    jdsl: KotlinJdslJpqlExecutor,
+) : EntityManager by em, KotlinJdslJpqlExecutor by jdsl, JpaTestSpec({
 
     val srv = TaskServiceImpl(accRepo, teamRepo, taskRepo, txOps)
 
-    fun EntityManager.reset() { flush(); clear() }
-
     test("get task") {
         // GIVEN
-        val team = teamRepo.findByTitle("police")!!
-        val acc = accRepo.findByUserName("alex")!!
-        val hero = acc.hero(team)!!
-        val expected = TaskDto(
-            "wake up",
-            "just wake up",
-            LocalDate.now(),
-            Duration.ofHours(3),
-            TaskPriority.High,
-            TeamDto(team.title),
-            HeroDto(acc.userName),
-            HeroDto(acc.userName),
-            TaskStatus.Work,
-            Duration.ofHours(2),
-            OffsetDateTime.now(),
-            emptyList()
-        ).apply { em.persist(Task(0, title, details, dueDate, cost, priority, team, hero, hero, status, spentTotal, createdAt)) }
+        val team = Team::title.eq("bandits")
+        val users = Account::userName.run { listOf(eq("serge"), eq("vi")) }
+        val heroes = users.map { it.hero(team) ?: error(it.userName) }
+        val target = taskDto(team.dto, users[0].hero, users[1].hero).also {
+            merge(it.toTask(team, heroes[0], heroes[1]))
+        }
 
         // WHEN
-        val actual = srv.getTask(GetTaskDto(expected.title, team.title))
+        val actual = srv.getTask(GetTaskDto(target.title, team.title))
 
         // THEN
-        actual shouldBeRight expected
+        actual shouldBeRight target
     }
 
     test("get task, no such task") {
         // GIVEN
-        em.persist(Team(0, "team9"))
+        val taskTitle = rndStr()
+        val team = merge(Team(0, rnd()))
 
         // WHEN
-        val actual = srv.getTask(GetTaskDto("task9", "team9"))
+        val actual = srv.getTask(GetTaskDto(taskTitle, team.title))
 
         // THEN
         actual.shouldBeLeft().shouldBeInstanceOf<NotFound>().run {
             prop shouldBe "Task.title"
-            value shouldBe "task9"
+            value shouldBe taskTitle
         }
     }
 
     test("get task, no such team") {
         // WHEN
-        val actual = srv.getTask(GetTaskDto("task9", "team9"))
+        val teamTitle = rndStr()
+        val actual = srv.getTask(GetTaskDto(rnd(), teamTitle))
 
         // THEN
         actual.shouldBeLeft().shouldBeInstanceOf<NotFound>().run {
             prop shouldBe "Team.title"
-            value shouldBe "team9"
+            value shouldBe teamTitle
         }
     }
 
     test("create task") {
         // GIVEN
-        val team = teamRepo.findByTitle("bandits")!!
-        val chiefUser = accRepo.findByUserName("serge")!!.userName
-        val heroUser = accRepo.findByUserName("vi")!!.userName
-        val expected = TaskDto(
-            "wake up",
-            "just wake up",
-            LocalDate.now(),
-            Duration.ofHours(3),
-            TaskPriority.High,
-            TeamDto(team.title),
-            HeroDto(chiefUser),
-            HeroDto(heroUser),
-            TaskStatus.Open,
-            ZERO,
-            OffsetDateTime.now(),
-            emptyList()
-        )
+        val team = Team::title.eq("bandits")
+        val (chief, hero) = "serge" to "vi"
+        val target = taskDto(TeamDto(team.title), HeroDto(chief), HeroDto(hero), Open, ZERO)
 
         // WHEN
-        val actual = expected.run {
-            srv.createTask(CreateTaskDto(title, details, dueDate, "$cost", priority, team.title, chiefUser, heroUser))
-        }
+        val actual = srv.createTask(target.toCreateTaskDto(team, chief, hero))
 
         // THEN
         actual.shouldBeRight().let {
-            it.createdAt shouldBeGreaterThanOrEqualTo expected.createdAt
-            setField(it, "createdAt", expected.createdAt)
-            it shouldBe expected
+            it.createdAt shouldBeGreaterThanOrEqualTo target.createdAt
+            setField(it, "createdAt", target.createdAt)
+            it shouldBe target
         }
     }
 
     test("update task status") {
         // GIVEN
-        val team = teamRepo.findByTitle("police")!!
-        val hero = accRepo.findByUserName("alex")!!.hero(team)!!
-        em.persist(Task(0, "", "", LocalDate.now(), ZERO, Low, team, hero, hero))
-        em.reset()
+        val team = Team::title.eq("police")
+        val hero = Account::userName.eq("alex").hero(team) ?: error("alex")
+        val task = merge(task(team, hero, hero, Open))
+        reset()
 
         // WHEN
-        val actual = srv.updateTaskStatus("", UpdateTaskStatusDto(team.title, TaskStatus.Work))
+        val actual = srv.updateTaskStatus(task.title, UpdateTaskStatusDto(team.title, Work))
 
         // THEN
         actual shouldBeRight Unit
-        em.createQuery("from Task", Task::class.java)
-            .resultList.shouldBeSingleton { it.status shouldBe TaskStatus.Work }
+        all<Task>().shouldBeSingleton { it.status shouldBe Work }
     }
 
     test("log spent") {
         // GIVEN
-        val team = teamRepo.findByTitle("police")!!
-        val hero = accRepo.findByUserName("alex")!!.hero(team)!!
-        val spentTotal = Duration.ofHours(1)
-        val spent = Duration.ofMinutes(45)
-        em.persist(Task(0, "", "", LocalDate.now(), ZERO, Low, team, hero, hero, TaskStatus.Work, spentTotal - spent))
-        em.reset()
+        val team = Team::title.eq("bandits")
+        val users = Account::userName.run { listOf(eq("serge"), eq("vi")) }
+        val heroes = users.map { it.hero(team) ?: error(it.userName) }
+        val (spentTotal, spent1, spent2) = Triple(ofHours(2),  ofMinutes(45), ofMinutes(33))
+        val task = merge(task(team, heroes[0], heroes[1], Work, spentTotal - spent1 - spent2))
+        reset()
 
         // WHEN
-        val actual = srv.logSpent("", LogSpentDto(team.title, "alex", "$spent"))
-        em.reset()
+        val actual = srv.logSpent(task.title, LogSpentDto(team.title, users[0].userName, "$spent1"))
+            .onRight { reset() }
+            .flatMap { srv.logSpent(task.title, LogSpentDto(team.title, users[1].userName, "$spent2")) }
+            .onRight { reset() }
 
         // THEN
         actual shouldBeRight Unit
-        em.createQuery("from Task t join fetch t.log", Task::class.java)
-            .resultList.shouldBeSingleton {
-                it.spentTotal shouldBe spentTotal
-                it.log.shouldBeSingleton { it.spent shouldBe spent }
-            }
+        all<Task>(Task::log).shouldBeSingleton {
+            it.spentTotal shouldBe spentTotal
+            it.log.map { it.spent }.shouldContainExactly(spent1, spent2)
+        }
     }
 
     // TODO more tests

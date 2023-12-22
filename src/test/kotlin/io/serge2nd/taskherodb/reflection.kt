@@ -4,8 +4,12 @@ import java.lang.invoke.MethodHandles.lookup
 import java.lang.invoke.MethodHandles.privateLookupIn
 import java.lang.reflect.Field
 import java.lang.reflect.Modifier.FINAL
+import kotlin.reflect.KClass
+import kotlin.reflect.full.isSuperclassOf
 import io.hypersistence.utils.common.ReflectionUtils.getField as field
 import java.lang.Integer.TYPE as INT
+
+operator fun KClass<*>.contains(that: Any?) = isInstance(that) || that is KClass<*> && isSuperclassOf(that)
 
 inline fun <reified T> cl() = T::class.java
 

@@ -13,10 +13,10 @@ class TestProject : AbstractProjectConfig() {
     override fun extensions() = listOf(SpringExtension, SpringAutowireConstructorExtension)
 
     override suspend fun beforeProject() {
-        setFinal<Dispatchers>("IO", BlockingDispatcher)
+        setFinal<Dispatchers>("IO", DirectCallImplier)
     }
 
-    private object BlockingDispatcher : CoroutineDispatcher() {
+    private object DirectCallImplier : CoroutineDispatcher() {
 
         override fun dispatch(context: CoroutineContext, block: Runnable) = error("denied")
 
