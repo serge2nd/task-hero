@@ -10,11 +10,13 @@ import kotlin.reflect.KProperty1
 abstract class JpaTestSpec(body: JpaTestSpec.() -> Unit)
 : FunSpec(), EntityManager, KotlinJdslJpqlExecutor { init { body() } }
 
+inline fun <reified E : Any> Jpql.en() = entity(E::class)
+
 inline fun <reified E : Any> KotlinJdslJpqlExecutor.all(
     vararg load: KProperty1<out Any, *>,
     crossinline p: Jpql.() -> Predicatable? = { null }
 ): List<E> = findAll {
-    select(entity(E::class)).from(entity(E::class), *load.map { leftFetchJoin(it) }.toTypedArray()).where(p())
+    select(en<E>()).from(en<E>(), *load.map { leftFetchJoin(it) }.toTypedArray()).where(p())
 }.filterNotNull()
 
 context(KotlinJdslJpqlExecutor) inline

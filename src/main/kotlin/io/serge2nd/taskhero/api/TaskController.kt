@@ -2,7 +2,6 @@ package io.serge2nd.taskhero.api
 
 import io.serge2nd.taskhero.dto.*
 import io.serge2nd.taskhero.service.TaskService
-import io.serge2nd.taskhero.service.assist.TaskAudit
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.enums.ParameterIn.PATH
 import jakarta.validation.Valid
@@ -18,10 +17,7 @@ import org.springframework.web.bind.annotation.RestController
 import org.springframework.http.MediaType.APPLICATION_JSON_VALUE as JSON
 
 @RestController
-class TaskController(
-    private val service: TaskService,
-    private val audit: TaskAudit,
-) {
+class TaskController(private val service: TaskService) {
 
     @GetMapping("/accounts/{userName}/task-log", produces = [JSON])
     @Parameter(name = "userName", `in` = PATH)
@@ -39,7 +35,7 @@ class TaskController(
 
     @GetMapping("/task-stats", produces = [JSON])
     suspend fun getTaskStats(@Valid @ParameterObject rq: ListTasksDto) =
-        service.listTasks(rq).map(audit::buildStats).toResponse()
+        service.getTaskStats(rq).toResponse()
 
     @PostMapping("/tasks", consumes = [JSON], produces = [JSON])
     suspend fun createTask(@Valid @RequestBody rq: CreateTaskDto) =

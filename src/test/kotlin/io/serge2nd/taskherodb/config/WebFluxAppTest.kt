@@ -1,9 +1,9 @@
 package io.serge2nd.taskherodb.config
 
 import com.ninjasquad.springmockk.MockkBean
+import io.serge2nd.taskhero.api.ErrorHandler
 import io.serge2nd.taskhero.config.CoreConfig
 import io.serge2nd.taskhero.service.TaskService
-import io.serge2nd.taskhero.service.assist.TaskAudit
 import org.springframework.boot.autoconfigure.http.codec.CodecsAutoConfiguration
 import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration
 import org.springframework.boot.autoconfigure.validation.ValidationAutoConfiguration
@@ -25,7 +25,7 @@ import org.springframework.test.context.ContextConfiguration
 ])
 annotation class WebFluxAppTest {
 
-    @ComponentScan("io.serge2nd.taskhero.api")
-    @MockkBean(TaskService::class, TaskAudit::class)
+    @ComponentScan(basePackageClasses = [ErrorHandler::class])
+    @MockkBean(TaskService::class)
     companion object
 }

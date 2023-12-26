@@ -21,6 +21,11 @@ interface TaskService {
     suspend fun listTasks(rq: ListTasksDto): Either<ServiceError, List<TaskDto>>
 
     /**
+     * Get task statistics over single or multiple teams
+     */
+    suspend fun getTaskStats(rq: ListTasksDto): Either<ServiceError, TaskStatsDto>
+
+    /**
      * Creates a task with the given parameters
      */
     suspend fun createTask(rq: CreateTaskDto): Either<ServiceError, TaskDto>

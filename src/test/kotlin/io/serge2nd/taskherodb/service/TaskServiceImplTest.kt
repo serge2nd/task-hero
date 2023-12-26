@@ -8,12 +8,12 @@ import io.kotest.matchers.collections.shouldBeSingleton
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.comparables.shouldBeGreaterThanOrEqualTo
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.types.shouldBeInstanceOf
+import io.mockk.mockk
 import io.serge2nd.taskhero.db.*
 import io.serge2nd.taskhero.dto.*
 import io.serge2nd.taskhero.enums.TaskStatus.Open
 import io.serge2nd.taskhero.enums.TaskStatus.Work
-import io.serge2nd.taskhero.service.ServiceError.NotFound
+import io.serge2nd.taskhero.service.ServiceError.Lack
 import io.serge2nd.taskhero.service.TaskServiceImpl
 import io.serge2nd.taskherodb.*
 import io.serge2nd.taskherodb.config.JpaAppTest
@@ -39,7 +39,7 @@ internal class TaskServiceImplTest(
     jdsl: KotlinJdslJpqlExecutor,
 ) : EntityManager by em, KotlinJdslJpqlExecutor by jdsl, JpaTestSpec({
 
-    val srv = TaskServiceImpl(accRepo, teamRepo, taskRepo, txOps)
+    val srv = TaskServiceImpl(accRepo, teamRepo, taskRepo, txOps, mockk())
 
     test("get task") {
         // GIVEN
@@ -66,10 +66,7 @@ internal class TaskServiceImplTest(
         val actual = srv.getTask(GetTaskDto(taskTitle, team.title))
 
         // THEN
-        actual.shouldBeLeft().shouldBeInstanceOf<NotFound>().run {
-            prop shouldBe "Task.title"
-            value shouldBe taskTitle
-        }
+        actual shouldBeLeft Lack("Task.title", taskTitle, "not found")
     }
 
     test("get task, no such team") {
@@ -78,10 +75,7 @@ internal class TaskServiceImplTest(
         val actual = srv.getTask(GetTaskDto(rnd(), teamTitle))
 
         // THEN
-        actual.shouldBeLeft().shouldBeInstanceOf<NotFound>().run {
-            prop shouldBe "Team.title"
-            value shouldBe teamTitle
-        }
+        actual shouldBeLeft Lack("Team.title", teamTitle, "not found")
     }
 
     test("create task") {

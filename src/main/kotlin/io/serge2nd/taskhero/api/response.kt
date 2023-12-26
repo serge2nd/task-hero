@@ -14,9 +14,10 @@ import org.springframework.http.ResponseEntity
  */
 fun Either<ServiceError, Any>.toResponse(status: HttpStatus = OK) = when (this) {
     is Left -> ResponseEntity(value, when (value) {
-        is BadRequest -> BAD_REQUEST
-        is Conflict -> CONFLICT
-        is NotFound -> NOT_FOUND
+        is Wrong -> BAD_REQUEST
+        is Clash -> CONFLICT
+        is Lack -> NOT_FOUND
+        is Fault -> INTERNAL_SERVER_ERROR
     })
     is Right -> when (value) {
         is Unit -> ResponseEntity<Any>(NO_CONTENT)

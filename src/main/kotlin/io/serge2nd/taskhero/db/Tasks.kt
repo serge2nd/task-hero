@@ -9,20 +9,18 @@ import org.springframework.data.repository.CrudRepository
 import org.springframework.transaction.annotation.Transactional
 import java.time.OffsetDateTime
 
-interface Tasks : CrudRepository<Task, Long>, IoScoped<Tasks> {
+interface Tasks : CrudRepository<Task, Long>, IoScoped<Tasks>, ExtraRepository {
 
+    @Query("from Task where $FIND_ONE")
     fun findByTeamAndTitle(team: Team, title: String): Task?
 
     @EntityGraph(attributePaths = ["chief.account", "hero.account"])
+    @Query("from Task where $FIND_ONE and status = :status")
     fun findByTeamAndTitleAndStatus(team: Team, title: String, status: TaskStatus): Task?
 
-    @Query("""
-        from Task t join fetch t.team
-        join fetch t.chief join fetch t.chief.account
-        join fetch t.hero join fetch t.hero.account
-        left join fetch t.log log left join fetch log.hero
-        where t.team = :team and t.title = trim(:title)
-          and log.hero is null or log.addedAt > t.createdAt and log.addedAt < instant
+    @EntityGraph(attributePaths = ["team", "chief.account", "hero.account", "log"])
+    @Query("""from Task where $FIND_ONE
+        and element(log).hero is null or element(log).addedAt between createdAt and instant
     """)
     fun findByTeamAndTitleHeavy(team: Team, title: String): Task?
 
@@ -44,7 +42,12 @@ interface Tasks : CrudRepository<Task, Long>, IoScoped<Tasks> {
     @Query("""
         from Task t join fetch t.team join fetch t.log log
         where log.hero in :heroes and log.hero.team = t.team
-          and log.addedAt >= greatest(:logFrom, t.createdAt) and log.addedAt < instant
+          and log.addedAt between greatest(:logFrom, t.createdAt) and instant
     """)
     fun findTaskLog(heroes: Collection<Hero>, logFrom: OffsetDateTime): List<Task>
+
+    private companion object {
+
+        const val FIND_ONE = "team = :team and title = trim(:title)"
+    }
 }
