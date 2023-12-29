@@ -4,6 +4,7 @@ import io.serge2nd.taskhero.enums.TaskPriority
 import io.serge2nd.taskhero.enums.TaskStatus
 import io.serge2nd.taskhero.enums.TaskStatus.Open
 import jakarta.persistence.*
+import jakarta.persistence.AccessType.PROPERTY
 import jakarta.persistence.EnumType.STRING
 import jakarta.persistence.FetchType.LAZY
 import org.hibernate.annotations.ColumnTransformer
@@ -12,6 +13,7 @@ import java.time.Duration.ZERO
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.OffsetDateTime.now
+import arrow.core.identity as a
 
 @Entity
 class Task(
@@ -31,9 +33,9 @@ class Task(
     @Column(updatable = false) val createdAt: OffsetDateTime = now(),
 ) {
 
-    @Version // filter by partition key in UPDATE statement
-    @Column(name = "team_id", insertable = false, updatable = false)
-    private val teamId = 0L
+    @get:[Access(PROPERTY) Version] // filter by partition key in UPDATE statement
+    @get:Column(name = "team_id", insertable = false, updatable = false)
+    private var teamId get() = a<Team?>(team)?.id; set(_) {}
 
     @ElementCollection
     @CollectionTable(name = "task_spent")
