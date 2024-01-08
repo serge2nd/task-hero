@@ -46,9 +46,8 @@ internal class TaskServiceImplTest(
         val team = Team::title.eq("bandits")
         val users = Account::userName.run { listOf(eq("serge"), eq("vi")) }
         val heroes = users.map { it.hero(team) ?: error(it.userName) }
-        val target = taskDto(team.dto, users[0].hero, users[1].hero).also {
-            merge(it.toTask(team, heroes[0], heroes[1]))
-        }
+        val target = taskDto(team.dto, users[0].hero, users[1].hero)
+        merge(target.toTask(team, heroes[0], heroes[1]))
 
         // WHEN
         val actual = srv.getTask(GetTaskDto(target.title, team.title))
